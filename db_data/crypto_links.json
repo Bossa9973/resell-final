@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pay-7749",
+    "clientName": "Alex Mercer",
+    "clientEmail": "alex@mercerdev.io",
+    "serviceName": "Developer Micro Node",
+    "amountUsd": 12,
+    "parentCost": 1.99,
+    "markupAmount": 10.01,
+    "cryptoType": "USDT",
+    "cryptoAddress": "0x3fff75865f2d0a44671857994a69daeb53994a69",
+    "cryptocurrencyAmount": 12,
+    "status": "completed",
+    "createdAt": "2026-06-01T01:02:36.985Z",
+    "resellerId": "master_reseller_demo"
+  },
+  {
+    "id": "pay-1104",
+    "clientName": "Sophia Carter",
+    "clientEmail": "sophia@carterconsulting.pro",
+    "serviceName": "Standard Scale Engine",
+    "amountUsd": 25,
+    "parentCost": 4.8,
+    "markupAmount": 20.2,
+    "cryptoType": "BTC",
+    "cryptoAddress": "bc1qxy2kg3ctynxu7ej6774ry2w7aspyuv7cjzsz8p",
+    "cryptocurrencyAmount": 0.000312,
+    "status": "pending",
+    "createdAt": "2026-06-02T13:02:36.985Z",
+    "resellerId": "master_reseller_demo"
+  }
+]

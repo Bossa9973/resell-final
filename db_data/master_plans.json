@@ -1,0 +1,50 @@
+[
+  {
+    "id": "vps-developer",
+    "name": "Developer Micro Node",
+    "type": "vps",
+    "cpu": "1 vCPU",
+    "ram": "2 GB ECC",
+    "storage": "35 GB NVMe",
+    "bandwidth": "1 TB",
+    "parentCost": 1.99,
+    "suggestedPrice": 4.99,
+    "active": true
+  },
+  {
+    "id": "vps-scale",
+    "name": "Standard Scale Engine",
+    "type": "vps",
+    "cpu": "2 vCPU",
+    "ram": "4 GB ECC",
+    "storage": "90 GB NVMe",
+    "bandwidth": "4 TB",
+    "parentCost": 4.8,
+    "suggestedPrice": 12,
+    "active": true
+  },
+  {
+    "id": "vps-dedicated",
+    "name": "Premium Dedicated Cluster",
+    "type": "vps",
+    "cpu": "4 vCPU Dedicated",
+    "ram": "16 GB ECC",
+    "storage": "250 GB NVMe",
+    "bandwidth": "10 TB",
+    "parentCost": 14.5,
+    "suggestedPrice": 38,
+    "active": true
+  },
+  {
+    "id": "dns-anycast",
+    "name": "Gold Anycast DNS Tier",
+    "type": "dns",
+    "cpu": "Anycast Latency",
+    "ram": "Instant Prop",
+    "storage": "ddosWaf Active",
+    "bandwidth": "Unlimited Queries",
+    "parentCost": 0.8,
+    "suggestedPrice": 2.5,
+    "active": true
+  }
+]

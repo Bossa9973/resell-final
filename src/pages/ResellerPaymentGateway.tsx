@@ -204,7 +204,8 @@ export default function ResellerPaymentGateway() {
       window.close();
     } catch (e) {}
     // Fallback safe redirect to panel router
-    navigate("/reseller-panel");
+    const isResellerNested = window.location.pathname.includes("/reseller-panel");
+    navigate(isResellerNested ? "/reseller-panel" : "/");
   };
 
   const formatCountdown = () => {
@@ -273,7 +274,10 @@ export default function ResellerPaymentGateway() {
                   <p className="text-xs text-zinc-500 max-w-xs leading-normal">{error}</p>
                 </div>
                 <button 
-                  onClick={() => navigate("/reseller-panel")} 
+                  onClick={() => {
+                    const isResellerNested = window.location.pathname.includes("/reseller-panel");
+                    navigate(isResellerNested ? "/reseller-panel" : "/");
+                  }} 
                   className="px-5 py-2.5 bg-zinc-900 border border-white/10 text-xs font-semibold rounded-xl text-white hover:bg-zinc-800 transition flex items-center gap-1.5"
                 >
                   <ArrowLeft size={14} />
@@ -296,7 +300,7 @@ export default function ResellerPaymentGateway() {
                   /* Settled Success View */
                   <div className="space-y-6 flex-1 flex flex-col justify-center py-4">
                     <div className="text-center space-y-2">
-                       <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/5">
+                      <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/5">
                         <Check size={22} />
                       </div>
                       <h3 className="text-lg font-bold text-white font-display tracking-tight uppercase leading-none mt-1">Invoice Settled Successfully</h3>

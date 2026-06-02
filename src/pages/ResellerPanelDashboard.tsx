@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { db, auth } from "@/lib/firebase";
-import { doc, onSnapshot, setDoc, getDocs, collection } from "firebase/firestore";
+import { useNavigate } from "react-router-dom";
 import { 
   Server, 
   LayoutDashboard, 
@@ -34,7 +32,13 @@ import {
   Globe,
   Database,
   Terminal,
-  RefreshCw
+  RefreshCw,
+  ShieldCheck,
+  ShieldAlert,
+  Trash2,
+  CheckCircle2,
+  LockKeyhole,
+  CheckSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -103,6 +107,143 @@ const currencyRates: Record<string, CurrencyMeta> = {
   GBP: { symbol: '£', rate: 0.79 }
 };
 
+const DEFAULT_RESELLER_CONFIG: ResellerConfig = {
+  resellerName: "Lumen Whitelabel Host",
+  supportEmail: "support@yourdomain.com",
+  currency: "USD",
+  marginMultiplier: 1.4,
+  parentApiUrl: "https://lumenhost.pro/api/v1",
+  customNameservers: [
+    "ns1.yourdomain.com",
+    "ns2.yourdomain.com"
+  ],
+  preconfiguredPlans: [
+    {
+      id: "vps-entry",
+      name: "Micro Core VPS",
+      type: "vps",
+      specs: {
+        cpu: "1 vCPU",
+        ram: "2 GB",
+        storage: "25 GB NVMe",
+        bandwidth: "1 TB"
+      },
+      parentCost: 3.00,
+      sellingPrice: 4.99,
+      active: true
+    },
+    {
+      id: "vps-developer",
+      name: "Developer Pro VPS",
+      type: "vps",
+      specs: {
+        cpu: "2 vCPU",
+        ram: "4 GB",
+        storage: "60 GB NVMe",
+        bandwidth: "3 TB"
+      },
+      parentCost: 6.50,
+      sellingPrice: 9.99,
+      active: true
+    },
+    {
+      id: "vps-enterprise",
+      name: "Quantum Elite VPS",
+      type: "vps",
+      specs: {
+        cpu: "4 vCPU",
+        ram: "8 GB",
+        storage: "120 GB NVMe",
+        bandwidth: "5 TB"
+      },
+      parentCost: 12.00,
+      sellingPrice: 19.99,
+      active: true
+    },
+    {
+      id: "dns-zone",
+      name: "Anycast Edge DNS Zone",
+      type: "dns",
+      specs: {
+        dnssec: "Enabled",
+        ddosWaf: "Active",
+        propagation: "Instant"
+      },
+      parentCost: 1.00,
+      sellingPrice: 2.49,
+      active: true
+    },
+    {
+      id: "db-redis",
+      name: "Managed High-Speed Redis",
+      type: "database",
+      specs: {
+        ram: "1 GB Memory",
+        backups: "Daily Automated",
+        connections: "10k Max"
+      },
+      parentCost: 4.00,
+      sellingPrice: 5.99,
+      active: true
+    }
+  ],
+  simulatedClients: [
+    {
+      id: "c-104",
+      name: "Marcus Aurelius",
+      email: "marcus@rome.io",
+      activeServices: 2,
+      status: "active",
+      joined: "2026-03-12"
+    },
+    {
+      id: "c-105",
+      name: "Ada Lovelace",
+      email: "ada@analytics.net",
+      activeServices: 1,
+      status: "active",
+      joined: "2026-04-05"
+    },
+    {
+      id: "c-106",
+      name: "Linus Torvalds",
+      email: "linus@kernel.org",
+      activeServices: 3,
+      status: "active",
+      joined: "2026-05-01"
+    }
+  ],
+  simulatedOrders: [
+    {
+      id: "ord-881",
+      clientName: "Marcus Aurelius",
+      planName: "Developer Pro VPS",
+      cost: 6.50,
+      revenue: 9.99,
+      date: "2026-05-15",
+      status: "provisioned"
+    },
+    {
+      id: "ord-882",
+      clientName: "Linus Torvalds",
+      planName: "Quantum Elite VPS",
+      cost: 12.00,
+      revenue: 19.99,
+      date: "2026-05-20",
+      status: "provisioned"
+    },
+    {
+      id: "ord-883",
+      clientName: "Ada Lovelace",
+      planName: "Micro Core VPS",
+      cost: 3.00,
+      revenue: 4.99,
+      date: "2026-05-24",
+      status: "pending_install"
+    }
+  ]
+};
+
 export default function ResellerPanelDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>("overview");
@@ -129,8 +270,8 @@ export default function ResellerPanelDashboard() {
   const [linkClientSelect, setLinkClientSelect] = useState<string>("custom");
   const [linkCustomName, setLinkCustomName] = useState<string>("");
   const [linkCustomEmail, setLinkCustomEmail] = useState<string>("");
-  const [linkServiceSelect, setLinkServiceSelect] = useState<string>("vps-entry");
-  const [linkPriceInput, setLinkPriceInput] = useState<string>("4.99");
+  const [linkServiceSelect, setLinkServiceSelect] = useState<string>("");
+  const [linkPriceInput, setLinkPriceInput] = useState<string>("");
   const [linkCryptoType, setLinkCryptoType] = useState<string>("USDT");
 
   // Form State: Withdrawals
@@ -139,8 +280,8 @@ export default function ResellerPanelDashboard() {
   const [payoutWalletAddress, setPayoutWalletAddress] = useState<string>("");
 
   // Form State: Branding Configurations
-  const [brandName, setBrandName] = useState<string>("");
-  const [brandEmail, setBrandEmail] = useState<string>("");
+  const [brandName, setBrandName] = useState<string>("Lumen Host");
+  const [brandEmail, setBrandEmail] = useState<string>("support@lumenhost.pro");
   const [brandCurrency, setBrandCurrency] = useState<string>("USD");
   const [brandColor, setBrandColor] = useState<string>("#6366f1");
   const [brandNs1, setBrandNs1] = useState<string>("");
@@ -156,18 +297,50 @@ export default function ResellerPanelDashboard() {
   const [jsonCopied, setJsonCopied] = useState<boolean>(false);
   const [htmlCopied, setHtmlCopied] = useState<boolean>(false);
 
+  // --- Platform Admin Stats & Interactive States ---
+  const [adminResellers, setAdminResellers] = useState<any[]>([]);
+  const [adminPlans, setAdminPlans] = useState<any[]>([]);
+  const [adminPayouts, setAdminPayouts] = useState<any[]>([]);
+  const [adminStats, setAdminStats] = useState<any>(null);
+  const [adminActiveSubTab, setAdminActiveSubTab] = useState<string>("overview");
+
+  // New master plan form states
+  const [newPlanId, setNewPlanId] = useState("");
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanParentCost, setNewPlanParentCost] = useState("");
+  const [newPlanSuggested, setNewPlanSuggested] = useState("");
+  const [newPlanCpu, setNewPlanCpu] = useState("2 vCPU");
+  const [newPlanRam, setNewPlanRam] = useState("4 GB ECC");
+  const [newPlanStorage, setNewPlanStorage] = useState("60 GB NVMe");
+
+  // Edit states
+  const [adminEditingResellerId, setAdminEditingResellerId] = useState<string | null>(null);
+  const [adminEditBalanceVal, setAdminEditBalanceVal] = useState("");
+  const [adminEditMarginVal, setAdminEditMarginVal] = useState("");
+
+  const loadAdminData = async () => {
+    try {
+      const resResellers = await fetch("/api/admin/resellers");
+      if (resResellers.ok) setAdminResellers(await resResellers.json());
+      
+      const resPlans = await fetch("/api/admin/plans");
+      if (resPlans.ok) setAdminPlans(await resPlans.json());
+      
+      const resPayouts = await fetch("/api/admin/payouts");
+      if (resPayouts.ok) setAdminPayouts(await resPayouts.json());
+      
+      const resStats = await fetch("/api/admin/system-stats");
+      if (resStats.ok) setAdminStats(await resStats.json());
+    } catch (e) {
+      console.warn("API admin stats offline, using in-memory fallback mappings.", e);
+    }
+  };
+
   // Notification Toast States
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Impersonation, query routes, and multi-tenancy
-  const [searchParams] = useSearchParams();
-  const queryResellerId = searchParams.get("resellerId");
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeResellerId, setActiveResellerId] = useState<string>("");
-  const [isImpersonating, setIsImpersonating] = useState<boolean>(false);
-
-  // Clock utc loader
+  // Initialize Clock
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
@@ -179,164 +352,60 @@ export default function ResellerPanelDashboard() {
     return () => clearInterval(clockInterval);
   }, []);
 
-  // Auth synchronization hook
+  // Fetch / Sync state from cache or local config
   useEffect(() => {
-    const unsub = auth.onAuthStateChanged((user) => {
-      setCurrentUser(user);
-    });
-    return unsub;
-  }, []);
-
-  // Multi-tenant profile selector hook
-  useEffect(() => {
-    if (queryResellerId) {
-      setActiveResellerId(queryResellerId);
-      setIsImpersonating(true);
-    } else if (currentUser) {
-      setActiveResellerId(currentUser.uid);
-      setIsImpersonating(false);
-    } else {
-      // Fallback to a fixed demo account so visitors can still use it
-      setActiveResellerId("master_reseller_demo");
-      setIsImpersonating(false);
-    }
-  }, [currentUser, queryResellerId]);
-
-  // Firestore onSnapshot listener for this reseller profile
-  useEffect(() => {
-    if (!activeResellerId) return;
-
-    const unsubDoc = onSnapshot(doc(db, "resellers", activeResellerId), async (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        const mergedConfig: ResellerConfig = {
-          resellerName: data.resellerName || "Lumen Whitelabel Host",
-          supportEmail: data.supportEmail || "support@yourdomain.com",
-          currency: data.currency || "USD",
-          marginMultiplier: data.marginMultiplier || 1.4,
-          parentApiUrl: data.parentApiUrl || "https://lumenhost.pro/api/v1",
-          customNameservers: data.customNameservers || ["ns1.yourdomain.com", "ns2.yourdomain.com"],
-          preconfiguredPlans: data.preconfiguredPlans || [],
-          simulatedClients: data.simulatedClients || [],
-          simulatedOrders: data.simulatedOrders || []
-        };
-
-        // If plans are empty, inherit central spec designs or default configurations
-        if (mergedConfig.preconfiguredPlans.length === 0) {
-          try {
-            const masterPlansSnap = await getDocs(collection(db, "reseller_master_plans"));
-            const fetchedPlans = masterPlansSnap.docs.map(d => {
-              const pData = d.data();
-              return {
-                id: pData.id,
-                name: pData.name,
-                type: pData.type || "vps",
-                specs: pData.specs || { cpu: "1 vCPU", ram: "2 GB", storage: "25 GB" },
-                parentCost: Number(pData.parentCost),
-                sellingPrice: Number(pData.suggestedPrice || (pData.parentCost * 1.3)),
-                active: true
-              };
-            });
-
-            if (fetchedPlans.length > 0) {
-              mergedConfig.preconfiguredPlans = fetchedPlans;
-            } else {
-              // Static fallbacks
-              const response = await fetch("/reseller-panel/config.json");
-              if (response.ok) {
-                const dummy = await response.json();
-                mergedConfig.preconfiguredPlans = dummy.preconfiguredPlans;
+    const loadState = async () => {
+      let loaded = false;
+      try {
+        const cached = localStorage.getItem("lumen_reseller_config");
+        if (cached) {
+          const parsed = JSON.parse(cached) as ResellerConfig;
+          setConfig(parsed);
+          populateFormDefaults(parsed);
+          console.log("[Reseller Dashboard] Cache loaded successfully.");
+          loaded = true;
+        } else {
+          let response = await fetch("./config.json");
+          if (!response.ok) {
+            response = await fetch("/config.json");
+          }
+          if (!response.ok) {
+            response = await fetch("/reseller-panel/config.json");
+          }
+          
+          if (response.ok) {
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              const data = await response.json();
+              if (data && data.resellerName) {
+                setConfig(data);
+                populateFormDefaults(data);
+                localStorage.setItem("lumen_reseller_config", JSON.stringify(data));
+                loaded = true;
               }
             }
-
-            // Sync synced plans back to db
-            await setDoc(doc(db, "resellers", activeResellerId), { preconfiguredPlans: mergedConfig.preconfiguredPlans }, { merge: true });
-          } catch (e) {
-            console.error("Central plans pull fail, using backup pre-sets:", e);
           }
         }
-
-        setConfig(mergedConfig);
-        populateFormDefaults(mergedConfig);
-
-        if (data.resellerWallet !== undefined) setResellerWallet(data.resellerWallet);
-        if (data.lumenProfit !== undefined) setLumenProfit(data.lumenProfit);
-        if (data.escrowBalance !== undefined) setEscrowBalance(data.escrowBalance);
-        if (data.escrowWithdrawn !== undefined) setEscrowWithdrawn(data.escrowWithdrawn);
-      } else {
-        // Build beautiful starting mock profile so user never sees a blank page
-        try {
-          const response = await fetch("/reseller-panel/config.json");
-          if (response.ok) {
-            const dataBase = await response.json();
-            const masterPlansSnap = await getDocs(collection(db, "reseller_master_plans"));
-            const masterPlansList = masterPlansSnap.docs.map(d => {
-              const pData = d.data();
-              return {
-                id: pData.id,
-                name: pData.name,
-                type: pData.type || "vps",
-                specs: pData.specs || { cpu: "1 vCPU", ram: "2 GB", storage: "25 GB" },
-                parentCost: Number(pData.parentCost),
-                sellingPrice: Number(pData.suggestedPrice || (pData.parentCost * 1.3)),
-                active: true
-              };
-            });
-
-            const initialObj = {
-              id: activeResellerId,
-              resellerName: activeResellerId === "master_reseller_demo" ? "Lumen Whitelabel Host (Demo)" : `Partner Portal (${activeResellerId.substring(0, 5)})`,
-              supportEmail: "support@whitelabelhost.pro",
-              currency: "USD",
-              customNameservers: ["ns1.lumenhost.pro", "ns2.lumenhost.pro"],
-              preconfiguredPlans: masterPlansList.length > 0 ? masterPlansList : dataBase.preconfiguredPlans,
-              simulatedClients: [
-                { id: "c-100", name: "Alexander the Great", email: "alexander@macedon.org", activeServices: 2, status: "active", joined: "2026-05-10" },
-                { id: "c-101", name: "Cleopatra Philopator", email: "cleo@alexandiralink.eg", activeServices: 1, status: "active", joined: "2026-05-18" }
-              ],
-              simulatedOrders: [
-                { id: "ord-100", clientName: "Alexander the Great", planName: "Developer Pro VPS", cost: 6.50, revenue: 9.99, date: "2026-05-20", status: "provisioned" }
-              ],
-              resellerWallet: 84.80,
-              lumenProfit: 1170.00,
-              escrowBalance: 1254.80,
-              escrowWithdrawn: 150.00
-            };
-
-            await setDoc(doc(db, "resellers", activeResellerId), initialObj);
-          }
-        } catch (bootErr) {
-          console.error("Failure booting partner workspace document:", bootErr);
+      } catch (err) {
+        console.warn("Could not load config via cache or network:", err);
+      } finally {
+        if (!loaded) {
+          console.log("[Reseller Dashboard] Falling back to default preconfigured config.");
+          setConfig(DEFAULT_RESELLER_CONFIG);
+          populateFormDefaults(DEFAULT_RESELLER_CONFIG);
+          localStorage.setItem("lumen_reseller_config", JSON.stringify(DEFAULT_RESELLER_CONFIG));
         }
       }
-    });
+    };
 
-    return () => unsubDoc();
-  }, [activeResellerId]);
+    loadState();
+  }, []);
 
-  // Synchronize reseller configs to cloud database
-  const syncToLocalStorage = async (newConfig: ResellerConfig) => {
+  // Sync back to local storage and alert other frames on config state modifications
+  const syncToLocalStorage = (newConfig: ResellerConfig) => {
     setConfig(newConfig);
     localStorage.setItem("lumen_reseller_config", JSON.stringify(newConfig));
     window.dispatchEvent(new Event("storage"));
-
-    try {
-      if (activeResellerId) {
-        await setDoc(doc(db, "resellers", activeResellerId), {
-          resellerName: newConfig.resellerName,
-          supportEmail: newConfig.supportEmail,
-          currency: newConfig.currency,
-          marginMultiplier: newConfig.marginMultiplier,
-          parentApiUrl: newConfig.parentApiUrl,
-          customNameservers: newConfig.customNameservers,
-          preconfiguredPlans: newConfig.preconfiguredPlans,
-          simulatedClients: newConfig.simulatedClients,
-          simulatedOrders: newConfig.simulatedOrders
-        }, { merge: true });
-      }
-    } catch (err) {
-      console.error("Failed syncing Whitelabel changes to database:", err);
-    }
   };
 
   const populateFormDefaults = (data: ResellerConfig) => {
@@ -362,11 +431,10 @@ export default function ResellerPanelDashboard() {
     }, 4000);
   };
 
-  // Escrow balance loader from api with multi-tenant resellerId
+  // Escrow balance loader from api
   const loadCryptoBalances = async () => {
     try {
-      if (!activeResellerId) return;
-      const res = await fetch(`/api/crypto/dashboard?resellerId=${activeResellerId}`);
+      const res = await fetch("/api/crypto/dashboard");
       if (!res.ok) throw new Error("Backend query failed");
       const data = await res.json();
       setEscrowBalance(data.balanceUSD);
@@ -381,10 +449,12 @@ export default function ResellerPanelDashboard() {
   };
 
   useEffect(() => {
-    if (activeTab === "crypto" && activeResellerId) {
+    if (activeTab === "crypto") {
       loadCryptoBalances();
+    } else if (activeTab === "admin") {
+      loadAdminData();
     }
-  }, [activeTab, activeResellerId]);
+  }, [activeTab]);
 
   const currencySymbol = () => {
     if (!config) return "$";
@@ -580,8 +650,7 @@ export default function ResellerPanelDashboard() {
           serviceName,
           amountUsd: amountUsdValue,
           cryptoType: linkCryptoType,
-          parentCost: matchedPlan ? matchedPlan.parentCost : undefined,
-          resellerId: activeResellerId
+          parentCost: matchedPlan ? matchedPlan.parentCost : undefined
         })
       });
 
@@ -629,8 +698,7 @@ export default function ResellerPanelDashboard() {
         body: JSON.stringify({
           amount: withdrawAmount,
           cryptoAddress: payoutWalletAddress.trim(),
-          cryptoType: payoutTokenType,
-          resellerId: activeResellerId
+          cryptoType: payoutTokenType
         })
       });
 
@@ -733,19 +801,6 @@ export default function ResellerPanelDashboard() {
   return (
     <div className="min-h-screen bg-[#090b0e] text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-white relative font-sans">
       
-      {isImpersonating && (
-        <div className="bg-amber-500/15 border-b border-amber-500/20 px-6 py-3 text-center text-amber-400 font-bold text-xs flex items-center justify-center gap-2 relative z-50">
-          <Lock size={12} className="text-amber-500 animate-pulse" />
-          <span>⚠️ PORTAL IMPERSONATION STATE: Inspecting live whitelabel client <strong>{config.resellerName}</strong> (UID: {activeResellerId}).</span>
-          <button 
-            onClick={() => navigate("/admin")}
-            className="ml-3 px-2.5 py-1 bg-amber-400 hover:bg-amber-350 text-black rounded-lg text-[10px] font-mono font-bold leading-none uppercase tracking-wide transition-all shadow-md shadow-amber-500/5 cursor-pointer"
-          >
-            Return to Master Portal
-          </button>
-        </div>
-      )}
-
       {/* Decorative Ornaments */}
       <div className="fixed top-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.06)_0%,_transparent_75%)] pointer-events-none z-0" />
       <div className="fixed bottom-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(0,225,255,0.04)_0%,_transparent_75%)] pointer-events-none z-0" />
@@ -825,6 +880,19 @@ export default function ResellerPanelDashboard() {
             <Sparkles size={14} className={activeTab === "export" ? "text-indigo-400" : "text-zinc-500"} />
             <span>Export Storefront</span>
           </button>
+
+          <button 
+            onClick={() => setActiveTab("admin")} 
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold transition border ${activeTab === "admin" ? "bg-indigo-500/10 border-indigo-500/20 text-white" : "text-zinc-400 border-white/0 hover:border-white/[0.05] hover:bg-white/[0.02]"}`}
+          >
+            <span className="flex items-center gap-3">
+              <ShieldCheck size={14} className={activeTab === "admin" ? "text-indigo-400" : "text-zinc-500"} />
+              <span>Platform Admin</span>
+            </span>
+            <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-300 rounded font-bold text-[8.5px] border border-indigo-500/20 font-mono tracking-wider">
+              MGR
+            </span>
+          </button>
         </nav>
 
         {/* Uplink Status Footer */}
@@ -836,7 +904,7 @@ export default function ResellerPanelDashboard() {
               </span>
               <span className="text-[10px] text-zinc-400 font-medium">Uplink Gateway</span>
             </div>
-            <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/5 border border-emerald-500/20 px-1.5 py-0.5 rounded">Active</span>
+            <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/5 border border-emerald-505/20 px-1.5 py-0.5 rounded">Active</span>
           </div>
         </div>
       </aside>
@@ -987,7 +1055,7 @@ export default function ResellerPanelDashboard() {
                           max="100" 
                           value={modelClients}
                           onChange={(e) => setModelClients(parseInt(e.target.value))}
-                          className="w-full accent-indigo-500 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
+                          className="w-full accent-indigo-505 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
 
@@ -1047,11 +1115,11 @@ export default function ResellerPanelDashboard() {
                     {/* Numeric Table summarizes */}
                     <div className="grid grid-cols-3 gap-4 bg-zinc-950/40 p-4 rounded-2xl border border-white/[0.05] text-center text-xs">
                       <div>
-                        <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold font-mono mb-1">Estimated Cost</p>
+                        <p className="text-[9px] uppercase tracking-wider text-zinc-505 font-extrabold font-mono mb-1">Estimated Cost</p>
                         <p className="text-sm font-bold text-white font-mono">{currencySymbol()}{(totalMonthlyCost * currencyRate()).toFixed(2)}</p>
                       </div>
                       <div className="border-x border-white/[0.08] px-2">
-                        <p className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold font-mono mb-1">Contract Sales</p>
+                        <p className="text-[9px] uppercase tracking-wider text-zinc-505 font-extrabold font-mono mb-1">Contract Sales</p>
                         <p className="text-sm font-bold text-indigo-400 font-mono" style={{ color: brandColor }}>{currencySymbol()}{(totalMonthlyGross * currencyRate()).toFixed(2)}</p>
                       </div>
                       <div>
@@ -1325,7 +1393,7 @@ export default function ResellerPanelDashboard() {
                         value={payoutWalletAddress}
                         onChange={(e) => setPayoutWalletAddress(e.target.value)}
                         placeholder="Provide your target ledger public address matching blockchain type" 
-                        className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                        className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-505 font-mono text-xs"
                       />
                     </div>
 
@@ -1385,7 +1453,7 @@ export default function ResellerPanelDashboard() {
                             value={linkCustomName}
                             onChange={(e) => setLinkCustomName(e.target.value)}
                             placeholder="Eg. Richard Hendricks" 
-                            className="w-full bg-zinc-950 text-white border border-[#ffffff]/10 rounded-xl p-3 focus:outline-none focus:border-indigo-500"
+                            className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-505"
                           />
                         </div>
                         <div className="space-y-1.5">
@@ -1395,7 +1463,7 @@ export default function ResellerPanelDashboard() {
                             value={linkCustomEmail}
                             onChange={(e) => setLinkCustomEmail(e.target.value)}
                             placeholder="Eg. richard@piedpiper.com" 
-                            className="w-full bg-zinc-950 text-white border border-[#ffffff]/10 rounded-xl p-3 focus:outline-none focus:border-indigo-500"
+                            className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-505"
                           />
                         </div>
                       </motion.div>
@@ -1410,7 +1478,7 @@ export default function ResellerPanelDashboard() {
                           const plan = config.preconfiguredPlans.find(p => p.id === e.target.value);
                           if (plan) setLinkPriceInput(plan.sellingPrice.toFixed(2));
                         }}
-                        className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-500 text-xs"
+                        className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-505 text-xs"
                       >
                         {config.preconfiguredPlans.filter(p => p.active).map(p => (
                           <option key={p.id} value={p.id}>{p.name} (${p.sellingPrice.toFixed(2)})</option>
@@ -1427,7 +1495,7 @@ export default function ResellerPanelDashboard() {
                           value={linkPriceInput}
                           onChange={(e) => setLinkPriceInput(e.target.value)}
                           placeholder="19.99" 
-                          className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 font-mono font-bold focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 font-mono font-bold focus:outline-none focus:border-indigo-505"
                         />
                       </div>
 
@@ -1436,7 +1504,7 @@ export default function ResellerPanelDashboard() {
                         <select 
                           value={linkCryptoType}
                           onChange={(e) => setLinkCryptoType(e.target.value)}
-                          className="w-full bg-zinc-950 text-white border border-[#ffffff]/10 rounded-xl p-3 text-xs focus:outline-none focus:border-indigo-500"
+                          className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 text-xs focus:outline-none focus:border-indigo-505"
                         >
                           <option value="USDT">USDT</option>
                           <option value="BTC">BTC</option>
@@ -1527,7 +1595,9 @@ export default function ResellerPanelDashboard() {
                             </tr>
                           ) : (
                             billingLinks.map((l: any) => {
-                              const payUrl = `${window.location.origin}/reseller-panel/pay?id=${l.id}`;
+                              const hasResellerInPath = window.location.pathname.includes("/reseller-panel");
+                              const pathPrefix = hasResellerInPath ? "/reseller-panel" : "";
+                              const payUrl = `${window.location.origin}${pathPrefix}/pay?id=${l.id}`;
                               const isCompleted = l.status === "completed";
                               
                               return (
@@ -1555,7 +1625,7 @@ export default function ResellerPanelDashboard() {
                                       Copy Link
                                     </button>
                                     <a 
-                                      href={`/reseller-panel/pay?id=${l.id}`} 
+                                      href={`${pathPrefix}/pay?id=${l.id}`} 
                                       target="_blank" 
                                       rel="noreferrer" 
                                       className="px-2.5 py-1.5 bg-indigo-600/15 border border-indigo-500/20 hover:bg-indigo-600/30 text-[10px] text-indigo-300 font-black rounded-lg transition inline-block text-center"
@@ -1608,7 +1678,7 @@ export default function ResellerPanelDashboard() {
                                   <td className="py-3 px-3 font-mono text-[10px] text-zinc-500 truncate max-w-[120px]" title={p.cryptoAddress}>{p.cryptoAddress}</td>
                                   <td className="py-3 px-3 font-mono font-extrabold text-white text-[12px]">${p.amount.toFixed(2)}</td>
                                   <td className="py-3 px-3 text-right">
-                                    <span className={`px-2 py-0.5 border text-[7.5px] uppercase tracking-wider rounded-md font-mono ${isCompleted ? "text-emerald-400 bg-emerald-500/5' border-emerald-505/10" : "text-amber-400 bg-amber-505/5 border-amber-500/10 animate-pulse"}`}>
+                                    <span className={`px-2 py-0.5 border text-[7.5px] uppercase tracking-wider rounded-md font-mono ${isCompleted ? "text-emerald-400 bg-emerald-500/5 border-emerald-505/10" : "text-amber-400 bg-amber-505/5 border-amber-500/10 animate-pulse"}`}>
                                       {p.status}
                                     </span>
                                   </td>
@@ -1666,13 +1736,13 @@ export default function ResellerPanelDashboard() {
                         value={brandEmail}
                         onChange={(e) => setBrandEmail(e.target.value)}
                         placeholder="Eg. support@yourdomain.com" 
-                        className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-500 font-semibold font-mono"
+                        className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-3 focus:outline-none focus:border-indigo-505 font-semibold font-mono"
                       />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <label className="text-[9px] uppercase tracking-widest font-mono text-zinc-500 font-extrabold block">Currency System</label>
+                        <label className="text-[9px] uppercase tracking-widest font-mono text-zinc-505 font-extrabold block">Currency System</label>
                         <select 
                           value={brandCurrency}
                           onChange={(e) => setBrandCurrency(e.target.value)}
@@ -1685,7 +1755,7 @@ export default function ResellerPanelDashboard() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[9px] uppercase tracking-widest font-mono text-zinc-500 font-extrabold block">Primary Theme Accent</label>
+                        <label className="text-[9px] uppercase tracking-widest font-mono text-zinc-505 font-extrabold block">Primary Theme Accent</label>
                         <div className="flex items-center gap-2">
                           <input 
                             type="color" 
@@ -1704,7 +1774,7 @@ export default function ResellerPanelDashboard() {
                       
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="text-[8px] font-mono font-bold text-zinc-500">NS1 ADDRESS</label>
+                          <label className="text-[8px] font-mono font-bold text-zinc-505">NS1 ADDRESS</label>
                           <input 
                             type="text" 
                             value={brandNs1}
@@ -1714,7 +1784,7 @@ export default function ResellerPanelDashboard() {
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-[8px] font-mono font-bold text-zinc-500">NS2 ADDRESS</label>
+                          <label className="text-[8px] font-mono font-bold text-zinc-505">NS2 ADDRESS</label>
                           <input 
                             type="text" 
                             value={brandNs2}
@@ -1750,7 +1820,7 @@ export default function ResellerPanelDashboard() {
                     <div className="mt-6 bg-[#06080b] rounded-2xl border border-white/5 p-4 space-y-4">
                       <div className="text-center space-y-1">
                         <h4 className="text-sm font-bold text-white leading-none tracking-tight">{brandName || "Lumen Host"}</h4>
-                        <p className="text-[8px] uppercase font-mono text-zinc-500 font-black">Secure Checkout gate</p>
+                        <p className="text-[8px] uppercase font-mono text-zinc-505 font-black">Secure Checkout gate</p>
                       </div>
 
                       <div className="bg-zinc-950/60 p-4 rounded-xl border border-white/[0.04] space-y-3">
@@ -1979,6 +2049,600 @@ export default function ResellerPanelDashboard() {
                 </div>
 
               </div>
+            </div>
+          )}
+
+          {/* Screen 8: Advanced Platform Admin Dashboard */}
+          {activeTab === "admin" && (
+            <div className="space-y-8 animate-fade-in text-xs">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/[0.05] pb-6">
+                <div className="space-y-1">
+                  <h2 className="text-2xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+                    <ShieldCheck className="text-indigo-400" size={24} />
+                    <span>Lumen Whitelabel Platform Infrastructure Hub</span>
+                  </h2>
+                  <p className="text-xs text-zinc-400">System operator access node managing global whitelabel resellers, wholesale master cost pricing tiers, and direct Ledger payouts reconciliation.</p>
+                </div>
+
+                {/* Sub Tab Navigation */}
+                <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-white/[0.06] select-none text-[11px] font-semibold">
+                  <button 
+                    onClick={() => setAdminActiveSubTab("overview")}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "overview" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                  >
+                    Metrics & Health
+                  </button>
+                  <button 
+                    onClick={() => setAdminActiveSubTab("resellers")}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "resellers" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                  >
+                    Whitelabel Portals ({adminResellers.length})
+                  </button>
+                  <button 
+                    onClick={() => setAdminActiveSubTab("plans")}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "plans" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                  >
+                    Wholesale cost Tiers ({adminPlans.length})
+                  </button>
+                  <button 
+                    onClick={() => setAdminActiveSubTab("payouts")}
+                    className={`px-3 py-1.5 rounded-lg transition-all relative ${adminActiveSubTab === "payouts" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                  >
+                    Payouts Gate
+                    {adminPayouts.some(p => p.status === "pending") && (
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sub-Screen 1: Health & Metrics Panel */}
+              {adminActiveSubTab === "overview" && (
+                <div className="space-y-8">
+                  {/* Ledger Bento Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[24px] space-y-2 select-none relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-all duration-300 pointer-events-none" />
+                      <p className="text-[10px] text-indigo-400 font-mono font-bold tracking-wider uppercase">System Wide Escrow Pool</p>
+                      <h4 className="text-3xl font-extrabold tracking-tight text-white">${(adminStats?.aggregatedEscrow || 3704.80).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h4>
+                      <p className="text-[9px] text-zinc-500">Aggregated crypto deposits securely held inside active node multisig contracts.</p>
+                    </div>
+
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[24px] space-y-2 select-none relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all duration-300 pointer-events-none" />
+                      <p className="text-[10px] text-emerald-400 font-mono font-bold tracking-wider uppercase">Platform Profit Retained</p>
+                      <h4 className="text-3xl font-extrabold tracking-tight text-white">${(adminStats?.aggregatedSystemEarnings || 3210.00).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h4>
+                      <p className="text-[9px] text-zinc-500">Gross parent-node license fees, hosting resource cost Retained by platform.</p>
+                    </div>
+
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[24px] space-y-2 select-none relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-all duration-300 pointer-events-none" />
+                      <p className="text-[10px] text-amber-400 font-mono font-bold tracking-wider uppercase">Outstanding Reseller Balances</p>
+                      <h4 className="text-3xl font-extrabold tracking-tight text-white">${(adminStats?.aggregatedResellerCredits || 494.80).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h4>
+                      <p className="text-[9px] text-zinc-500">Accrued markup ledger balances awaiting withdrawal requests by resellers.</p>
+                    </div>
+
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[24px] space-y-2 select-none relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 rounded-full blur-2xl group-hover:bg-rose-500/10 transition-all duration-300 pointer-events-none" />
+                      <p className="text-[10px] text-rose-400 font-mono font-bold tracking-wider uppercase">Total Payouts Disbursed</p>
+                      <h4 className="text-3xl font-extrabold tracking-tight text-white">${(adminStats?.aggregatedWithdrawn || 450.00).toLocaleString(undefined, { minimumFractionDigits: 2 })}</h4>
+                      <p className="text-[9px] text-zinc-500">Total volume of approved payout tickets dispersed to whitelabel partners.</p>
+                    </div>
+                  </div>
+
+                  {/* Hypervisor Node Statuses and Network Log Monitor */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] lg:col-span-2 space-y-4">
+                      <div className="flex justify-between items-center border-b border-white/[0.05] pb-3 select-none">
+                        <h3 className="text-[11px] font-bold uppercase tracking-widest font-mono text-zinc-400 flex items-center gap-2">
+                          <Cpu size={14} className="text-indigo-400" />
+                          <span>Global Hypervisor Clusters (Virtualizer Monitoring)</span>
+                        </h3>
+                        <span className="flex items-center gap-1 text-[9px] text-emerald-400 font-bold bg-emerald-500/5 border border-emerald-500/10 px-2 py-0.5 rounded-md">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>All Hypervisors Synchronized</span>
+                        </span>
+                      </div>
+
+                      <div className="divide-y divide-white/[0.03] space-y-3 pt-2">
+                        {(adminStats?.monitoring?.hypervisors || [
+                          { name: "Node-1.KVM-London", status: "online", load: "42%", containers: 184, ramUsage: "64.8%" },
+                          { name: "Node-2.KVM-Frankfurt", status: "online", load: "31%", containers: 110, ramUsage: "48.2%" },
+                          { name: "Node-3.KVM-Singapore", status: "online", load: "18%", containers: 75, ramUsage: "39.0%" }
+                        ]).map((node: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center py-2 text-xs">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-xl bg-zinc-950 border border-white/5 flex items-center justify-center text-zinc-400">
+                                <Server size={14} className="text-indigo-400" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-white">{node.name}</p>
+                                <p className="text-[9px] text-zinc-500 font-mono font-bold uppercase">{node.containers} server instances loaded</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-6 font-mono text-[10px]">
+                              <div>
+                                <span className="text-zinc-500 font-medium">Memory:</span> <span className="text-zinc-300 font-bold">{node.ramUsage}</span>
+                              </div>
+                              <div>
+                                <span className="text-zinc-500 font-medium">CPU Load:</span> <span className="text-indigo-300 font-bold">{node.load}</span>
+                              </div>
+                              <span className="text-[9px] font-semibold text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-2 py-0.5 rounded">
+                                {node.status}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Operational Safeguards / Controls */}
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] space-y-5 select-none font-mono">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2 border-b border-white/[0.05] pb-3">
+                        <Activity size={14} className="text-indigo-400" />
+                        <span>Security & Shield Logs</span>
+                      </h3>
+                      
+                      <div className="space-y-3 text-[10px]">
+                        <div className="flex justify-between items-center py-1 border-b border-white/[0.03]">
+                          <span className="text-zinc-500">Automated DNS Backups:</span>
+                          <span className="text-emerald-400 font-bold">HEALTHY</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-white/[0.03]">
+                          <span className="text-zinc-500">DDoS Deflections (1h):</span>
+                          <span className="text-indigo-400 font-bold">{adminStats?.monitoring?.ddosMitigationsLastHour || 4} Attacks blocked</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-white/[0.03]">
+                          <span className="text-zinc-500">KVM Virtualizer Version:</span>
+                          <span className="text-zinc-300 font-bold">v6.8.1-stable</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-zinc-500">Platform Escrow Safety:</span>
+                          <span className="text-indigo-400 font-bold">100% COLLATERAL</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-xl flex items-start gap-2.5">
+                        <ShieldAlert size={14} className="text-indigo-400 shrink-0 mt-0.5" />
+                        <p className="text-[9px] text-zinc-400 leading-normal">
+                          All payments processed through thewhitelabel portals are placed in collateral escrow before manual payouts are processed, preventing credit fraud.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Screen 2: Reseller Registry Management */}
+              {adminActiveSubTab === "resellers" && (
+                <div className="space-y-8">
+                  <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] space-y-4">
+                    <div className="flex justify-between items-center border-b border-white/[0.05] pb-3 select-none">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest font-mono text-zinc-400">Whitelabel Reseller Portals Registry</h3>
+                      <button 
+                        onClick={() => {
+                          const id = `reseller-${Math.floor(100 + Math.random() * 900)}`;
+                          const name = prompt("Enter Whitelabel portal name:");
+                          const email = prompt("Enter portal support Email:");
+                          if (name && email) {
+                            fetch("/api/admin/resellers", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ id, name, email, marginFactor: 1.4 })
+                            }).then(async r => {
+                              if (r.ok) {
+                                showToast("Registered new Whitelabel Reseller!");
+                                await loadAdminData();
+                              } else {
+                                const data = await r.json();
+                                alert(data.error);
+                              }
+                            });
+                          }
+                        }}
+                        className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[10px] px-3 py-1.5 rounded-xl transition shadow-lg shadow-indigo-600/15"
+                      >
+                        <UserPlus size={12} />
+                        <span>Add New Tenant</span>
+                      </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/[0.04] text-[9.5px] font-bold tracking-widest uppercase text-zinc-500 select-none">
+                            <th className="pb-3 px-3">Subdomain Key ID</th>
+                            <th className="pb-3 px-3">Brand Portal / Owner</th>
+                            <th className="pb-3 px-3">Margin Factor</th>
+                            <th className="pb-3 px-3">Escrow Pool Balance</th>
+                            <th className="pb-3 px-3">Withdrawn</th>
+                            <th className="pb-3 px-3 text-right">Ledger Wallet</th>
+                            <th className="pb-3 px-3 text-right">Platform Fee Fees</th>
+                            <th className="pb-3 px-3 text-center">Status</th>
+                            <th className="pb-3 px-3 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.03]">
+                          {adminResellers.map((res: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-white/[0.01]">
+                              <td className="py-3 px-3 font-mono text-[10px] text-zinc-400 font-bold">{res.id}</td>
+                              <td className="py-3 px-3 text-xs">
+                                <p className="font-semibold text-white">{res.name}</p>
+                                <p className="text-[10px] text-zinc-500">{res.email}</p>
+                              </td>
+                              <td className="py-3 px-3 font-mono text-[11px] text-indigo-400 font-semibold">{res.marginFactor || 1.4}x</td>
+                              <td className="py-3 px-3 font-mono text-[11px] text-zinc-300">${(res.escrowBalance || 0).toFixed(2)}</td>
+                              <td className="py-3 px-3 font-mono text-[11px] text-zinc-500">${(res.escrowWithdrawn || 0).toFixed(2)}</td>
+                              <td className="py-3 px-3 font-mono text-[11px] text-right font-bold text-amber-400">${(res.resellerWallet || 0).toFixed(2)}</td>
+                              <td className="py-3 px-3 font-mono text-[11px] text-right text-emerald-400">${(res.lumenProfit || 0).toFixed(2)}</td>
+                              <td className="py-3 px-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[8.5px] font-mono font-bold border uppercase tracking-wider ${res.status === "active" ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/15" : "text-rose-400 bg-rose-500/5 border-rose-500/15"}`}>
+                                  {res.status || "active"}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-right space-x-1.5">
+                                <button 
+                                  onClick={() => {
+                                    setAdminEditingResellerId(res.id);
+                                    setAdminEditBalanceVal(String(res.resellerWallet));
+                                    setAdminEditMarginVal(String(res.marginFactor || 1.4));
+                                  }}
+                                  className="text-[9.5px] font-semibold text-indigo-400 hover:text-indigo-300 transition"
+                                >
+                                  Edit Credits
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    const nextStatus = res.status === "active" ? "suspended" : "active";
+                                    fetch(`/api/admin/resellers/${res.id}`, {
+                                      method: "PUT",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ status: nextStatus })
+                                    }).then(async () => {
+                                      showToast(`Reseller portal "${res.name}" is now ${nextStatus}.`);
+                                      await loadAdminData();
+                                    });
+                                  }}
+                                  className={`text-[9.5px] font-bold transition ${res.status === "active" ? "text-rose-500 hover:text-rose-400" : "text-emerald-400 hover:text-emerald-300"}`}
+                                >
+                                  {res.status === "active" ? "Suspend" : "Activate"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Inline Reseller Edit Panel Modal */}
+                  {adminEditingResellerId && (
+                    <div className="bg-[#0e121b]/60 border border-indigo-500/10 p-6 rounded-[32px] space-y-4 max-w-md">
+                      <div className="flex justify-between items-center select-none border-b border-white/[0.05] pb-3">
+                        <h4 className="text-xs font-bold uppercase tracking-widest font-mono text-zinc-300">Modify Reseller Accounting Balance</h4>
+                        <button onClick={() => setAdminEditingResellerId(null)} className="text-zinc-500 hover:text-white transition">
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-semibold text-zinc-500 font-mono">Ledger Wallet Balance (USD)</label>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            value={adminEditBalanceVal}
+                            onChange={(e) => setAdminEditBalanceVal(e.target.value)}
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl px-3.5 py-2 text-white font-mono text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-semibold text-zinc-500 font-mono">Margin Multiplier Factor</label>
+                          <input 
+                            type="number" 
+                            step="0.1"
+                            value={adminEditMarginVal}
+                            onChange={(e) => setAdminEditMarginVal(e.target.value)}
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl px-3.5 py-2 text-white font-mono text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => {
+                          fetch(`/api/admin/resellers/${adminEditingResellerId}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              resellerWallet: parseFloat(adminEditBalanceVal),
+                              marginFactor: parseFloat(adminEditMarginVal)
+                            })
+                          }).then(async r => {
+                            if (r.ok) {
+                              showToast("Accounting ledger balances updated.");
+                              setAdminEditingResellerId(null);
+                              await loadAdminData();
+                              await loadCryptoBalances();
+                            }
+                          });
+                        }}
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl transition text-[11px]"
+                      >
+                        Commit Ledger Reconciliation
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sub-Screen 3: Wholesale Pricing plans & Master Node Speeds */}
+              {adminActiveSubTab === "plans" && (
+                <div className="space-y-8">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    
+                    {/* Master Tiers list */}
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] lg:col-span-2 space-y-4">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest font-mono text-zinc-400 border-b border-white/[0.05] pb-3">Available Platform Resource Nodes (Wholesale Master Cost Tiers)</h3>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-white/[0.04] text-[9.5px] font-bold tracking-widest uppercase text-zinc-500 select-none">
+                              <th className="pb-3 px-3">Plan/Node ID</th>
+                              <th className="pb-3 px-3">Specification Name</th>
+                              <th className="pb-3 px-3">Specs Info</th>
+                              <th className="pb-3 px-3 text-right">Wholesale cost (System Cost)</th>
+                              <th className="pb-3 px-3 text-right">Suggested Retail</th>
+                              <th className="pb-3 px-3 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/[0.03]">
+                            {adminPlans.map((plan: any, idx: number) => (
+                              <tr key={idx} className="hover:bg-white/[0.01]">
+                                <td className="py-3 px-3 font-mono text-[10px] text-zinc-400 font-semibold">{plan.id}</td>
+                                <td className="py-3 px-3 text-xs">
+                                  <p className="font-bold text-white">{plan.name}</p>
+                                  <span className="text-[9.5px] uppercase font-mono bg-zinc-900 border border-white/5 px-2 py-0.5 rounded text-indigo-400 font-extrabold">{plan.type}</span>
+                                </td>
+                                <td className="py-3 px-3 text-[10px] text-zinc-400 leading-normal">
+                                  <div className="font-mono">
+                                    <p>CPU: {plan.cpu || "N/A"}</p>
+                                    <p>RAM: {plan.ram || "N/A"}</p>
+                                    <p>Storage: {plan.storage || "N/A"}</p>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 font-mono text-[11px] text-right text-emerald-400 font-bold">
+                                  <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    defaultValue={plan.parentCost.toFixed(2)}
+                                    onBlur={(e) => {
+                                      const num = parseFloat(e.target.value);
+                                      if (!isNaN(num)) {
+                                        handleUpdateMasterPlanCost(plan.id, num);
+                                      }
+                                    }}
+                                    className="bg-zinc-950 border border-white/5 rounded px-2 py-1 outline-none text-right text-[11px] font-bold text-emerald-400 w-16 focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                </td>
+                                <td className="py-3 px-3 font-mono text-[11px] text-right text-zinc-400 font-semibold">${(plan.suggestedPrice || plan.parentCost * 1.5).toFixed(2)}</td>
+                                <td className="py-3 px-3 text-right">
+                                  <button 
+                                    onClick={() => {
+                                      if (confirm(`Are you sure you want to delete the master node tier:  ${plan.name}?`)) {
+                                        fetch(`/api/admin/plans/${plan.id}`, { method: "DELETE" }).then(async r => {
+                                          if (r.ok) {
+                                            showToast(`Master plan ${plan.name} removed from registry.`);
+                                            await loadAdminData();
+                                          }
+                                        });
+                                      }
+                                    }}
+                                    className="text-zinc-500 hover:text-rose-500 transition"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Create New Master Node Provisioner */}
+                    <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] space-y-4">
+                      <h3 className="text-[11.5px] font-bold uppercase tracking-widest font-mono text-zinc-300 border-b border-white/[0.05] pb-3">Provision Host hardware node</h3>
+
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-500 font-mono tracking-wider font-semibold">Wholesale Key ID</label>
+                          <input 
+                            type="text" 
+                            placeholder="e.g. vps-enterprise-amd"
+                            value={adminNewPlanId}
+                            onChange={(e) => setAdminNewPlanId(e.target.value)}
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl px-3 py-2 text-white font-mono placeholder-zinc-700 text-xs focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-500 font-mono tracking-wider font-semibold">Provisioner Name Description</label>
+                          <input 
+                            type="text" 
+                            placeholder="AMD EPYC Enterprise Cluster"
+                            value={adminNewPlanName}
+                            onChange={(e) => setAdminNewPlanName(e.target.value)}
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl px-3 py-2 text-white font-sans placeholder-zinc-700 text-xs focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-zinc-500 font-mono tracking-wider font-semibold">Base cost (USD)</label>
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              placeholder="18.50"
+                              value={adminNewPlanParentCost}
+                              onChange={(e) => setAdminNewPlanParentCost(e.target.value)}
+                              className="w-full bg-zinc-950 border border-white/5 rounded-xl px-3 py-2 text-white font-mono placeholder-zinc-700 text-xs focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] text-zinc-500 font-mono tracking-wider font-semibold">Suggested sales price</label>
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              placeholder="45.00"
+                              value={adminNewPlanSuggested}
+                              onChange={(e) => setAdminNewPlanSuggested(e.target.value)}
+                              className="w-full bg-zinc-950 border border-white/5 rounded-xl px-3 py-2 text-white font-mono placeholder-zinc-700 text-xs focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 pt-1 font-mono">
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-zinc-600">CPU</label>
+                            <input type="text" value={newPlanCpu} onChange={e => setNewPlanCpu(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded px-2 py-1 text-[11px] text-zinc-300" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-zinc-600">RAM</label>
+                            <input type="text" value={newPlanRam} onChange={e => setNewPlanRam(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded px-2 py-1 text-[11px] text-zinc-300" />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-zinc-600">Disk NVMe</label>
+                            <input type="text" value={newPlanStorage} onChange={e => setNewPlanStorage(e.target.value)} className="w-full bg-zinc-950 border border-white/5 rounded px-2 py-1 text-[11px] text-zinc-300" />
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => {
+                            if (!adminNewPlanId.trim() || !adminNewPlanName.trim() || !adminNewPlanParentCost.trim()) {
+                              showToast("Please provide base keys, billing name, and cost calculations.");
+                              return;
+                            }
+                            fetch("/api/admin/plans", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                id: adminNewPlanId,
+                                name: adminNewPlanName,
+                                type: "vps",
+                                cpu: newPlanCpu,
+                                ram: newPlanRam,
+                                storage: newPlanStorage,
+                                bandwidth: "10 TB Burst",
+                                parentCost: parseFloat(adminNewPlanParentCost),
+                                suggestedPrice: parseFloat(adminNewPlanSuggested || String(parseFloat(adminNewPlanParentCost) * 1.5))
+                              })
+                            }).then(async r => {
+                              if (r.ok) {
+                                showToast(`New wholesale hardware specification "${adminNewPlanName}" is active!`);
+                                setAdminNewPlanId("");
+                                setAdminNewPlanName("");
+                                setAdminNewPlanParentCost("");
+                                setAdminNewPlanSuggested("");
+                                await loadAdminData();
+                              }
+                            });
+                          }}
+                          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-xl transition text-[11px] font-sans mt-3"
+                        >
+                          Deploy New Hardware Tier
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Screen 4: Reconciliation Payout Gate */}
+              {adminActiveSubTab === "payouts" && (
+                <div className="space-y-8">
+                  <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] space-y-4">
+                    <div className="flex justify-between items-center border-b border-white/[0.05] pb-3 select-none">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest font-mono text-zinc-400">Withdrawal Request Tickets & Escalations Gate</h3>
+                      <span className="text-[9.5px] font-mono text-indigo-400 font-bold bg-indigo-500/5 px-2.5 py-1 border border-indigo-500/10 rounded-md">
+                        {adminPayouts.filter(p => p.status === "pending").length} Tickets Pending Manual Reconciliation
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/[0.04] text-[9.5px] font-bold tracking-widest uppercase text-zinc-500 select-none">
+                            <th className="pb-3 px-3">Ticket ID</th>
+                            <th className="pb-3 px-3">Portal Sponsor</th>
+                            <th className="pb-3 px-3">Req Amount</th>
+                            <th className="pb-3 px-3">Target Address Location</th>
+                            <th className="pb-3 px-3">Received Time</th>
+                            <th className="pb-3 px-3 text-center">Ticket status</th>
+                            <th className="pb-3 px-3 text-right">Gate Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.03]">
+                          {adminPayouts.map((pay: any, idx: number) => {
+                            const sponsor = adminResellers.find(r => r.id === pay.resellerId) || { name: "System Partner" };
+                            return (
+                              <tr key={idx} className="hover:bg-white/[0.01]">
+                                <td className="py-3 px-3 font-mono text-[10px] text-zinc-400 font-extrabold">{pay.id}</td>
+                                <td className="py-3 px-3 text-xs">
+                                  <p className="font-semibold text-white">{sponsor.name}</p>
+                                  <p className="text-[9.5px] text-indigo-400 font-mono text-[8px] uppercase">{pay.resellerId}</p>
+                                </td>
+                                <td className="py-3 px-3 font-mono text-[11px] font-extrabold text-amber-400">${parseFloat(String(pay.amount)).toFixed(2)}</td>
+                                <td className="py-3 px-3">
+                                  <div className="flex items-center gap-1.5 font-mono text-[10.5px] text-zinc-300">
+                                    <span className="bg-zinc-900 border border-white/5 text-[9px] px-1.5 py-0.5 rounded text-zinc-400 font-bold tracking-widest uppercase">{pay.cryptoType}</span>
+                                    <span className="font-semibold truncate max-w-[200px]">{pay.cryptoAddress}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3 font-mono text-[10px] text-zinc-500">
+                                  {pay.createdAt ? new Date(pay.createdAt).toLocaleString() : "Recently"}
+                                </td>
+                                <td className="py-3 px-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded text-[8px] font-mono font-bold border uppercase tracking-widest ${pay.status === "completed" ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/10" : pay.status === "pending" ? "text-amber-400 bg-amber-500/5 border-amber-500/10 animate-pulse" : "text-rose-400 bg-rose-500/5 border-rose-500/10"}`}>
+                                    {pay.status}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  {pay.status === "pending" ? (
+                                    <div className="flex items-center justify-end gap-2 text-[9.5px] font-bold">
+                                      <button 
+                                        onClick={() => handleApprovePayout(pay.id)}
+                                        className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg transition"
+                                      >
+                                        <CheckCircle2 size={11} />
+                                        <span>Disburse</span>
+                                      </button>
+                                      <button 
+                                        onClick={() => handleRejectPayout(pay.id)}
+                                        className="flex items-center gap-1 bg-rose-600 hover:bg-rose-600 text-white px-2.5 py-1 rounded-lg transition"
+                                      >
+                                        <Ban size={11} />
+                                        <span>Reject Ticket</span>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-zinc-500 font-mono font-bold uppercase select-none">Finalized Ledger</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
 

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "lumen_host_demo",
+    "name": "Lumen Host Whitelabel Portal",
+    "email": "support@lumenhost.pro",
+    "escrowBalance": 1254.8,
+    "escrowWithdrawn": 150,
+    "resellerWallet": 84.8,
+    "lumenProfit": 1170,
+    "status": "active",
+    "joined": "2026-01-12",
+    "marginFactor": 1.4
+  },
+  {
+    "id": "master_reseller_demo",
+    "name": "Master Reseller Gate",
+    "email": "admin@mastergate.cloud",
+    "escrowBalance": 2450,
+    "escrowWithdrawn": 300,
+    "resellerWallet": 410,
+    "lumenProfit": 2040,
+    "status": "active",
+    "joined": "2026-02-18",
+    "marginFactor": 1.5
+  },
+  {
+    "id": "cybersphere",
+    "name": "CyberSphere VPS Solutions",
+    "email": "billing@cybersphere.net",
+    "escrowBalance": 0,
+    "escrowWithdrawn": 0,
+    "resellerWallet": 0,
+    "lumenProfit": 0,
+    "status": "suspended",
+    "joined": "2026-03-01",
+    "marginFactor": 1.3
+  }
+]

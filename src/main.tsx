@@ -1,10 +1,10 @@
-// src/main.tsx
 import React from "react";
 import ReactDOM from "react-dom/client";
-import ResellerPanelDashboard from "./pages/ResellerPanelDashboard";
+import App from "./Apps";
+import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ResellerPanelDashboard />
+    <App />
   </React.StrictMode>
 );
