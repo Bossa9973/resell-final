@@ -436,7 +436,7 @@ export default function ResellerPanelDashboard() {
 
           const initialObj = {
             id: activeResellerId,
-            resellerName: activeResellerId === "master_reseller_demo" ? "Lumen Whitelabel Host (Demo)" : `Partner Portal (${activeResellerId.substring(0, 5)})`,
+            resellerName: activeResellerId === "master_reseller_demo" ? "Lumen Whitelabel Host" : `Partner Portal (${activeResellerId.substring(0, 5)})`,
             supportEmail: "support@whitelabelhost.pro",
             currency: "USD",
             customNameservers: ["ns1.lumenhost.pro", "ns2.lumenhost.pro"],
