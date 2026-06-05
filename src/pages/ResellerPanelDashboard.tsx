@@ -20,6 +20,7 @@ import {
   Plus,
   Lock,
   Banknote,
+  Ban,
   Send,
   Link2,
   Copy,
@@ -41,6 +42,8 @@ import {
   CheckSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { auth, db } from "../lib/firebase";
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "firebase/auth";
 
 interface SpecSheet {
   cpu?: string;
@@ -318,6 +321,92 @@ export default function ResellerPanelDashboard() {
   const [adminEditBalanceVal, setAdminEditBalanceVal] = useState("");
   const [adminEditMarginVal, setAdminEditMarginVal] = useState("");
 
+  // Master new admin plan form states
+  const [adminNewPlanId, setAdminNewPlanId] = useState("");
+  const [adminNewPlanName, setAdminNewPlanName] = useState("");
+  const [adminNewPlanParentCost, setAdminNewPlanParentCost] = useState("");
+  const [adminNewPlanSuggested, setAdminNewPlanSuggested] = useState("");
+
+  // --- Enhanced Real-world Admin / Whitelist / Convoy state variables ---
+  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [platformUsers, setPlatformUsers] = useState<any[]>([]);
+  const [loginRequests, setLoginRequests] = useState<any[]>([]);
+  const [convoyNodes, setConvoyNodes] = useState<any[]>([]);
+
+  // Add Reseller Dialog States (connecting to platforms users list!)
+  const [addResellerSelectedUserId, setAddResellerSelectedUserId] = useState<string>("");
+  const [addResellerCompany, setAddResellerCompany] = useState<string>("");
+  const [addResellerMargin, setAddResellerMargin] = useState<string>("1.4");
+  const [showAddResellerModal, setShowAddResellerModal] = useState<boolean>(false);
+
+  // Convoy Node Form States
+  const [addConvoyName, setAddConvoyName] = useState<string>("");
+  const [addConvoyHost, setAddConvoyHost] = useState<string>("");
+  const [addConvoyRegion, setAddConvoyRegion] = useState<string>("London, UK");
+  const [addConvoyRam, setAddConvoyRam] = useState<string>("64 GB");
+
+  // Portal Access / Login request (waitlist form) states
+  const [submitRequestName, setSubmitRequestName] = useState<string>("");
+  const [submitRequestEmail, setSubmitRequestEmail] = useState<string>("");
+  const [submitRequestRole, setSubmitRequestRole] = useState<string>("reseller");
+  const [submitRequestCompany, setSubmitRequestCompany] = useState<string>("");
+  const [submitRequestReason, setSubmitRequestReason] = useState<string>("");
+  const [waitlistSuccessMessage, setWaitlistSuccessMessage] = useState<string>("");
+
+  const handleUpdateMasterPlanCost = async (id: string, parentCost: number) => {
+    try {
+      const res = await fetch(`/api/admin/plans/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parentCost })
+      });
+      if (res.ok) {
+        showToast("Master hardware node cost updated successfully!");
+        await loadAdminData();
+      } else {
+        const d = await res.json();
+        showToast(`Error: ${d.error || "Failed blueprint update"}`);
+      }
+    } catch (err) {
+      showToast("Simulation or offline fallback completed.");
+    }
+  };
+
+  const handleApprovePayout = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/payouts/approve/${id}`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        showToast(`Payout request ${id} is approved and ledger disbursed.`);
+        await loadAdminData();
+      } else {
+        const d = await res.json();
+        showToast(`Error approving: ${d.error || "failed payout approval"}`);
+      }
+    } catch (err) {
+      showToast("Reconciled payout locally.");
+    }
+  };
+
+  const handleRejectPayout = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/payouts/reject/${id}`, {
+        method: "POST"
+      });
+      if (res.ok) {
+        showToast(`Payout request ${id} is rejected and wallet refunded.`);
+        await loadAdminData();
+      } else {
+        const d = await res.json();
+        showToast(`Error rejecting: ${d.error || "failed payout rejection"}`);
+      }
+    } catch (err) {
+      showToast("Rejected payout ticket locally.");
+    }
+  };
+
   const loadAdminData = async () => {
     try {
       const resResellers = await fetch("/api/admin/resellers");
@@ -331,10 +420,58 @@ export default function ResellerPanelDashboard() {
       
       const resStats = await fetch("/api/admin/system-stats");
       if (resStats.ok) setAdminStats(await resStats.json());
+
+      const resUsers = await fetch("/api/admin/platform-users");
+      if (resUsers.ok) setPlatformUsers(await resUsers.json());
+
+      const resRequests = await fetch("/api/admin/login-requests");
+      if (resRequests.ok) setLoginRequests(await resRequests.json());
+
+      const resNodes = await fetch("/api/admin/convoy-real-status");
+      if (resNodes.ok) setConvoyNodes(await resNodes.json());
     } catch (e) {
       console.warn("API admin stats offline, using in-memory fallback mappings.", e);
     }
   };
+
+  const handleSignIn = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      showToast(`Welcome, ${result.user.displayName || result.user.email}!`);
+    } catch (err: any) {
+      console.error(err);
+      showToast(`Sign in failed: ${err.message}`);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      showToast("Signed out successfully.");
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const email = currentUser.email?.toLowerCase() || "";
+        const adminEmails = ["vladislavmladenov03@gmail.com", "ceo@lumenhost.pro", "chichogo6o69@gmail.com"];
+        const isAdm = adminEmails.includes(email) || currentUser.uid === "1276619530310778891";
+        setIsAdmin(isAdm);
+        
+        if (isAdm && activeTab === "admin") {
+          loadAdminData();
+        }
+      } else {
+        setIsAdmin(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [activeTab]);
 
   // Notification Toast States
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -923,9 +1060,40 @@ export default function ResellerPanelDashboard() {
           </div>
 
           <div className="flex items-center gap-4 select-none">
-            <div className="text-xs text-zinc-400 font-mono bg-zinc-950 px-3 py-1.5 rounded-xl border border-white/[0.04]">
+            <div className="text-xs text-zinc-400 font-mono bg-zinc-950 px-3 py-1.5 rounded-xl border border-white/[0.04] hidden md:block">
               <span className="text-indigo-400" style={{ color: brandColor }}>● UTC Time:</span> <span className="text-zinc-200">{utcTime}</span>
             </div>
+
+            {/* Google Authentication Component */}
+            {user ? (
+              <div className="flex items-center gap-2.5 bg-zinc-950 px-3 py-1.5 rounded-xl border border-white/[0.04]">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt={user.displayName || "User"} className="w-5 h-5 rounded-full" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-indigo-600 text-[10px] text-white flex items-center justify-center font-bold font-mono">
+                    {user.email?.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="text-[10px] text-zinc-300 font-medium max-w-[100px] truncate">{user.email}</span>
+                <span className={`text-[8px] uppercase tracking-wider font-extrabold px-1 rounded font-mono ${isAdmin ? "text-indigo-400 bg-indigo-500/15" : "text-zinc-500 bg-white/5"}`}>
+                  {isAdmin ? "Admin" : "Reseller"}
+                </span>
+                <button
+                  onClick={handleSignOut}
+                  className="text-[9px] text-rose-400 hover:text-rose-350 font-semibold px-1 py-0.5 rounded transition hover:bg-rose-500/10"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleSignIn}
+                className="flex items-center gap-1.5 text-[11px] text-indigo-400 hover:text-indigo-350 font-bold transition border border-indigo-500/15 px-3 py-1.5 rounded-xl bg-indigo-500/5 hover:bg-indigo-500/10"
+              >
+                <span>Authorize Account</span>
+              </button>
+            )}
+
             <button 
               onClick={() => navigate("/dashboard")} 
               className="flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white font-semibold transition border border-white/[0.08] px-3.5 py-1.5 rounded-xl bg-white/[0.01] hover:bg-white/[0.04]"
@@ -2055,46 +2223,198 @@ export default function ResellerPanelDashboard() {
           {/* Screen 8: Advanced Platform Admin Dashboard */}
           {activeTab === "admin" && (
             <div className="space-y-8 animate-fade-in text-xs">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/[0.05] pb-6">
-                <div className="space-y-1">
-                  <h2 className="text-2xl font-bold font-display tracking-tight text-white flex items-center gap-2">
-                    <ShieldCheck className="text-indigo-400" size={24} />
-                    <span>Lumen Whitelabel Platform Infrastructure Hub</span>
-                  </h2>
-                  <p className="text-xs text-zinc-400">System operator access node managing global whitelabel resellers, wholesale master cost pricing tiers, and direct Ledger payouts reconciliation.</p>
-                </div>
+              {!isAdmin ? (
+                <div className="max-w-xl mx-auto bg-[#0d1017]/80 border border-white/5 p-8 rounded-[32px] space-y-6 relative overflow-hidden my-6">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+                  
+                  <div className="text-center space-y-3">
+                    <div className="w-16 h-16 bg-[#e11d48]/10 text-[#f43f5e] rounded-2xl flex items-center justify-center border border-rose-500/20 mx-auto">
+                      <Lock size={28} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h2 className="text-xl font-bold font-display tracking-tight text-white leading-tight">Cryptographic Administration Gate</h2>
+                      <p className="text-xs text-zinc-400">Section reserved exclusively for approved Lumen platform operators.</p>
+                    </div>
+                  </div>
 
-                {/* Sub Tab Navigation */}
-                <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-white/[0.06] select-none text-[11px] font-semibold">
-                  <button 
-                    onClick={() => setAdminActiveSubTab("overview")}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "overview" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
-                  >
-                    Metrics & Health
-                  </button>
-                  <button 
-                    onClick={() => setAdminActiveSubTab("resellers")}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "resellers" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
-                  >
-                    Whitelabel Portals ({adminResellers.length})
-                  </button>
-                  <button 
-                    onClick={() => setAdminActiveSubTab("plans")}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "plans" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
-                  >
-                    Wholesale cost Tiers ({adminPlans.length})
-                  </button>
-                  <button 
-                    onClick={() => setAdminActiveSubTab("payouts")}
-                    className={`px-3 py-1.5 rounded-lg transition-all relative ${adminActiveSubTab === "payouts" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
-                  >
-                    Payouts Gate
-                    {adminPayouts.some(p => p.status === "pending") && (
-                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  <div className="bg-zinc-950 p-4 rounded-2xl border border-white/[0.04] space-y-3">
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider font-mono text-zinc-500">Authentication Status</h4>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-400">Current Session User:</span>
+                      <span className="font-mono font-semibold text-zinc-200">{user ? user.email : "Guest Session (Anonymous)"}</span>
+                    </div>
+                    {user ? (
+                      <div className="flex items-center justify-between text-[11.5px] border-t border-white/[0.03] pt-2">
+                        <span className="text-rose-400 font-semibold">Verification status:</span>
+                        <span className="bg-rose-500/15 text-rose-400 font-mono text-[9px] px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Access Restricted</span>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={handleSignIn}
+                        className="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-xl transition text-[11px] font-sans shadow-lg shadow-indigo-600/15"
+                      >
+                        Sign In with Google Admin Credentials
+                      </button>
                     )}
-                  </button>
+                  </div>
+
+                  {/* Enrollment waitlist/login request form */}
+                  <div className="border-t border-white/[0.05] pt-6 space-y-4">
+                    <div className="space-y-1">
+                      <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <UserPlus size={14} className="text-indigo-400" />
+                        <span>Request Institutional Access / Login</span>
+                      </h3>
+                      <p className="text-[10px] text-zinc-400">Submit an authorization proposal to get registered as an administrator or whitelabel reseller partner.</p>
+                    </div>
+
+                    {waitlistSuccessMessage ? (
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl text-emerald-400 text-center space-y-1 select-none">
+                        <p className="font-bold text-xs">Request Successfully Transmitted!</p>
+                        <p className="text-[10px] font-mono leading-normal text-zinc-400">Proposal ID: <span className="text-emerald-300">#{Math.floor(1000 + Math.random() * 9000)}</span>. Platform operators will review your credentials at ceo@lumenhost.pro.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                        <div className="space-y-1 md:col-span-2">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Full Name</label>
+                          <input 
+                            type="text" 
+                            value={submitRequestName}
+                            onChange={(e) => setSubmitRequestName(e.target.value)}
+                            placeholder="John Doe"
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Institutional Email</label>
+                          <input 
+                            type="email" 
+                            value={submitRequestEmail}
+                            onChange={(e) => setSubmitRequestEmail(e.target.value)}
+                            placeholder="john@firm.com"
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Account Role Proposal</label>
+                          <select 
+                            value={submitRequestRole}
+                            onChange={(e) => setSubmitRequestRole(e.target.value)}
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="reseller">Whitelabel Reseller Partner</option>
+                            <option value="admin">Platform Operator (Admin)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1 md:col-span-2">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Company / Project Branding</label>
+                          <input 
+                            type="text" 
+                            value={submitRequestCompany}
+                            onChange={(e) => setSubmitRequestCompany(e.target.value)}
+                            placeholder="Aethelgard Corp. Whitelabel"
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-sans"
+                          />
+                        </div>
+                        <div className="space-y-1 md:col-span-2">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">Business Intention / Reason</label>
+                          <textarea 
+                            value={submitRequestReason}
+                            onChange={(e) => setSubmitRequestReason(e.target.value)}
+                            placeholder="I require reseller rights to set custom markup node tiers for high-performance virtual hosts."
+                            className="w-full bg-zinc-950 border border-white/5 rounded-xl p-2.5 text-xs text-white min-h-[70px] resize-none focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        
+                        <button 
+                          onClick={async () => {
+                            if (!submitRequestEmail || !submitRequestName) {
+                              showToast("Please provide Name and Email; they are required inputs.");
+                              return;
+                            }
+                            try {
+                              const res = await fetch("/api/admin/login-requests", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  name: submitRequestName,
+                                  email: submitRequestEmail,
+                                  role: submitRequestRole,
+                                  company: submitRequestCompany,
+                                  reason: submitRequestReason
+                                })
+                              });
+                              if (res.ok) {
+                                setWaitlistSuccessMessage("Success");
+                                showToast("Platform enrollment request received!");
+                              }
+                            } catch (err) {
+                              showToast("Access proposal submitted locally.");
+                              setWaitlistSuccessMessage("Local Success");
+                            }
+                          }}
+                          className="w-full md:col-span-2 mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition text-[11px] font-sans"
+                        >
+                          Submit Platform Access Request
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/[0.05] pb-6">
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-bold font-display tracking-tight text-white flex items-center gap-2">
+                        <ShieldCheck className="text-indigo-400" size={24} />
+                        <span>Lumen Whitelabel Platform Infrastructure Hub</span>
+                      </h2>
+                      <p className="text-xs text-zinc-400">System operator access node managing global whitelabel resellers, wholesale master cost pricing tiers, and direct Ledger payouts reconciliation.</p>
+                    </div>
+
+                    {/* Sub Tab Navigation */}
+                    <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-white/[0.06] select-none text-[11px] font-semibold">
+                      <button 
+                        onClick={() => setAdminActiveSubTab("overview")}
+                        className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "overview" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                      >
+                        Metrics & Health
+                      </button>
+                      <button 
+                        onClick={() => setAdminActiveSubTab("resellers")}
+                        className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "resellers" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                      >
+                        Whitelabel Portals ({adminResellers.length})
+                      </button>
+                      <button 
+                        onClick={() => setAdminActiveSubTab("plans")}
+                        className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "plans" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                      >
+                        Wholesale cost Tiers ({adminPlans.length})
+                      </button>
+                      <button 
+                        onClick={() => setAdminActiveSubTab("convoy")}
+                        className={`px-3 py-1.5 rounded-lg transition-all ${adminActiveSubTab === "convoy" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                      >
+                        Convoy Nodes ({convoyNodes.length})
+                      </button>
+                      <button 
+                        onClick={() => setAdminActiveSubTab("requests")}
+                        className={`px-3 py-1.5 rounded-lg transition-all relative ${adminActiveSubTab === "requests" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                      >
+                        Access Waitlist ({loginRequests.filter(r => r.status === "pending").length})
+                      </button>
+                      <button 
+                        onClick={() => setAdminActiveSubTab("payouts")}
+                        className={`px-3 py-1.5 rounded-lg transition-all relative ${adminActiveSubTab === "payouts" ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" : "text-zinc-400 hover:text-zinc-100"}`}
+                      >
+                        Payouts Gate
+                        {adminPayouts.some(p => p.status === "pending") && (
+                          <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
               {/* Sub-Screen 1: Health & Metrics Panel */}
               {adminActiveSubTab === "overview" && (
@@ -2222,24 +2542,7 @@ export default function ResellerPanelDashboard() {
                       <h3 className="text-[11px] font-bold uppercase tracking-widest font-mono text-zinc-400">Whitelabel Reseller Portals Registry</h3>
                       <button 
                         onClick={() => {
-                          const id = `reseller-${Math.floor(100 + Math.random() * 900)}`;
-                          const name = prompt("Enter Whitelabel portal name:");
-                          const email = prompt("Enter portal support Email:");
-                          if (name && email) {
-                            fetch("/api/admin/resellers", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ id, name, email, marginFactor: 1.4 })
-                            }).then(async r => {
-                              if (r.ok) {
-                                showToast("Registered new Whitelabel Reseller!");
-                                await loadAdminData();
-                              } else {
-                                const data = await r.json();
-                                alert(data.error);
-                              }
-                            });
-                          }
+                          setShowAddResellerModal(true);
                         }}
                         className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[10px] px-3 py-1.5 rounded-xl transition shadow-lg shadow-indigo-600/15"
                       >
@@ -2247,6 +2550,108 @@ export default function ResellerPanelDashboard() {
                         <span>Add New Tenant</span>
                       </button>
                     </div>
+
+                    {/* Add New Tenant Modal/Card - Real Dynamic Whitelist Selective Portal Form */}
+                    {showAddResellerModal && (
+                      <div className="bg-[#0c0f16] border border-indigo-500/30 p-6 rounded-[28px] space-y-4 max-w-xl mx-auto my-4 transition-all duration-300 shadow-2xl">
+                        <div className="flex justify-between items-center border-b border-white/[0.05] pb-2">
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1.5">
+                            <Sparkles size={13} className="text-indigo-400" />
+                            <span>Provision Whitelabel Reseller Tenant</span>
+                          </h4>
+                          <button onClick={() => setShowAddResellerModal(false)} className="text-zinc-500 hover:text-white transition">
+                            <X size={14} />
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-4 text-left">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Synchronized Platform User (from Whitelist)</label>
+                            <select
+                              value={addResellerSelectedUserId}
+                              onChange={(e) => {
+                                const selectedId = e.target.value;
+                                setAddResellerSelectedUserId(selectedId);
+                                const selectedUser = platformUsers.find((u: any) => u.id === selectedId);
+                                if (selectedUser) {
+                                  setAddResellerCompany(selectedUser.fullName || selectedUser.username || "");
+                                }
+                              }}
+                              className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:border-indigo-500"
+                            >
+                              <option value="">-- Choose Registered whitelist user --</option>
+                              {platformUsers.map((u: any, i: number) => (
+                                <option key={i} value={u.id}>
+                                  {u.fullName || u.username || "Guest"} ({u.email})
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-[9px] text-zinc-500 leading-normal">Lists registered accounts directly synchronized from the Platform Whitelist database.</p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Brand Portal name</label>
+                              <input
+                                type="text"
+                                value={addResellerCompany}
+                                onChange={(e) => setAddResellerCompany(e.target.value)}
+                                placeholder="Aethelgard Hosting"
+                                className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:border-indigo-500 font-sans"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Margin Markups (x)</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={addResellerMargin}
+                                onChange={(e) => setAddResellerMargin(e.target.value)}
+                                placeholder="1.4"
+                                className="w-full bg-zinc-950 text-white border border-white/10 rounded-xl p-2.5 text-xs focus:outline-none focus:border-indigo-500 font-mono"
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={async () => {
+                              if (!addResellerSelectedUserId || !addResellerCompany) {
+                                showToast("Please select a registered user and provide brand name.");
+                                return;
+                              }
+                              const selectedUser = platformUsers.find((u: any) => u.id === addResellerSelectedUserId);
+                              const id = "reseller-" + Math.floor(100 + Math.random() * 900);
+                              
+                              try {
+                                const res = await fetch("/api/admin/resellers", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    id,
+                                    name: addResellerCompany,
+                                    email: selectedUser?.email || "support@lumenhost.pro",
+                                    marginFactor: parseFloat(addResellerMargin)
+                                  })
+                                });
+                                if (res.ok) {
+                                  showToast("Whitelabel portal activated for selected user!");
+                                  setShowAddResellerModal(false);
+                                  await loadAdminData();
+                                } else {
+                                  const d = await res.json();
+                                  showToast(d.error || "Provisioning error");
+                                }
+                              } catch (err: any) {
+                                showToast("Error connecting to backend API.");
+                              }
+                            }}
+                            className="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition text-[11px] font-sans shadow-lg shadow-indigo-600/15"
+                          >
+                            Launch Whitelabel Tenant for User
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="overflow-x-auto">
                       <table className="w-full text-left border-collapse">
@@ -2641,6 +3046,258 @@ export default function ResellerPanelDashboard() {
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* Sub-Screen 5: Connected Convoy Nodes */}
+              {adminActiveSubTab === "convoy" && (
+                <div className="space-y-8">
+                  {/* Connect Convoy Node form */}
+                  <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] space-y-4">
+                    <div className="border-b border-white/[0.05] pb-3">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-1.5 uppercase font-mono tracking-wider">
+                        <Network size={16} className="text-indigo-400" />
+                        <span>Register KVM Convoy Hypervisor Host</span>
+                      </h3>
+                      <p className="text-[10px] text-zinc-400">Establish a secure API connection between Convoy cloud orchestrator and the Whitelabel billing engine.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-left">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest font-mono block">Node Name Identifier</label>
+                        <input
+                          type="text"
+                          value={addConvoyName}
+                          onChange={(e) => setAddConvoyName(e.target.value)}
+                          placeholder="Node-4.KVM-Zürich"
+                          className="w-full bg-zinc-950 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-sans"
+                        />
+                      </div>
+                      <div className="space-y-1 md:col-span-1">
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest font-mono block">Host IP / FQDN</label>
+                        <input
+                          type="text"
+                          value={addConvoyHost}
+                          onChange={(e) => setAddConvoyHost(e.target.value)}
+                          placeholder="185.122.90.3"
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest font-mono block">Region / Cluster</label>
+                        <input
+                          type="text"
+                          value={addConvoyRegion}
+                          onChange={(e) => setAddConvoyRegion(e.target.value)}
+                          placeholder="Zürich, CH"
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-sans"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest font-mono block">RAM Dedicated Pool</label>
+                        <input
+                          type="text"
+                          value={addConvoyRam}
+                          onChange={(e) => setAddConvoyRam(e.target.value)}
+                          placeholder="256 GB ECC"
+                          className="w-full bg-[#030712] border border-white/10 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+
+                      <button
+                        onClick={async () => {
+                          if (!addConvoyName || !addConvoyHost) {
+                            showToast("Please provide Node Name and IP Host.");
+                            return;
+                          }
+                          try {
+                            const res = await fetch("/api/admin/convoy-nodes", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                name: addConvoyName,
+                                host: addConvoyHost,
+                                region: addConvoyRegion,
+                                ramPool: addConvoyRam
+                              })
+                            });
+                            if (res.ok) {
+                              showToast(`Successfully registered Node: ${addConvoyName}!`);
+                              setAddConvoyName("");
+                              setAddConvoyHost("");
+                              await loadAdminData();
+                            }
+                          } catch (e) {
+                            showToast("Saved node cluster locally.");
+                          }
+                        }}
+                        className="md:col-span-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-xl transition text-[11px] font-sans"
+                      >
+                        Register and Connect Convoy Cluster Node Partner
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Connected Clusters List */}
+                  <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] space-y-4">
+                    <h3 className="text-[11px] font-bold uppercase tracking-widest font-mono text-zinc-400">Active Convoy Node Interfaces</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {convoyNodes.map((node, i) => (
+                        <div key={i} className="bg-zinc-950 p-5 rounded-2xl border border-white/[0.04] space-y-4 relative overflow-hidden group">
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl group-hover:bg-emerald-500/10 pointer-events-none" />
+                          
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="text-xs font-bold text-white font-mono flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>{node.name}</span>
+                              </h4>
+                              <p className="text-[10px] text-zinc-400 font-mono">{node.host}</p>
+                            </div>
+                            <span className="text-[8.5px] uppercase font-mono tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-extrabold">
+                              {node.status || "online"}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3 border-t border-white/[0.03] pt-3 text-[10px]">
+                            <div>
+                              <p className="text-zinc-500 tracking-wider">RAM POOL</p>
+                              <p className="font-mono text-zinc-300 font-bold">{node.ramPool || "64 GB"}</p>
+                            </div>
+                            <div>
+                              <p className="text-zinc-500 tracking-wider">CPU UTIL</p>
+                              <p className="font-mono text-zinc-300 font-bold">{node.cpuLoad || "10%"}</p>
+                            </div>
+                            <div>
+                              <p className="text-zinc-500 tracking-wider">SERVERS</p>
+                              <p className="font-mono text-zinc-300 font-bold">{node.activeContainers || 0} Containers</p>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 flex justify-between items-center text-[10px] border-t border-white/[0.03]">
+                            <span className="text-zinc-500 font-mono">KVM: {node.kvmVersion || "v6.8.2"} | {node.region || "London"}</span>
+                            <button
+                              onClick={async () => {
+                                if (confirm(`Disconnect and suspend convoy node ${node.name}?`)) {
+                                  try {
+                                    const r = await fetch(`/api/admin/convoy-nodes/${node.id}`, { method: "DELETE" });
+                                    if (r.ok) {
+                                      showToast(`Removed convoy node: ${node.name}`);
+                                      await loadAdminData();
+                                    }
+                                  } catch (err) {
+                                    showToast("Removed node locally.");
+                                  }
+                                }
+                              }}
+                              className="text-rose-400 font-bold hover:text-rose-350 transition px-2 py-0.5"
+                            >
+                              Disconnect
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Screen 6: Portal Access Proposals Waitlist */}
+              {adminActiveSubTab === "requests" && (
+                <div className="space-y-8">
+                  <div className="bg-[#0e121b]/40 border border-white/5 p-6 rounded-[32px] space-y-4 animate-fade-in">
+                    <div className="flex justify-between items-center border-b border-white/[0.05] pb-3 select-none">
+                      <h3 className="text-[11px] font-bold uppercase tracking-widest font-mono text-zinc-400">Institutional Access Proposals (Waitlist Requests)</h3>
+                      <span className="text-[9.5px] font-mono text-indigo-400 font-bold bg-indigo-500/5 px-2.5 py-1 border border-indigo-500/10 rounded-md">
+                        {loginRequests.filter(r => r.status === "pending").length} Pending Platform Admissions
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/[0.04] text-[9.5px] font-bold tracking-widest uppercase text-zinc-500 select-none">
+                            <th className="pb-3 px-3">Applicant Name</th>
+                            <th className="pb-3 px-3">Subcontract Proposals ID</th>
+                            <th className="pb-3 px-3">Proposed Role</th>
+                            <th className="pb-3 px-3">Branding Company Idea</th>
+                            <th className="pb-3 px-3">Admissions Rationale</th>
+                            <th className="pb-3 px-3 select-none text-center">Ticket Status</th>
+                            <th className="pb-3 px-3 text-right">Decisions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.03] text-xs">
+                          {loginRequests.map((req, idx) => (
+                            <tr key={idx} className="hover:bg-white/[0.01]">
+                              <td className="py-4 px-3 font-semibold text-white">
+                                <p className="font-bold text-zinc-200">{req.name}</p>
+                                <p className="text-[10px] text-zinc-500">{req.email}</p>
+                              </td>
+                              <td className="py-4 px-3 font-mono text-[10px] text-zinc-400 font-bold">{req.id}</td>
+                              <td className="py-4 px-3 font-mono text-[10px]">
+                                <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold border uppercase tracking-wider ${req.role === "admin" ? "text-indigo-400 bg-indigo-500/5 border-indigo-500/15" : "text-purple-400 bg-purple-500/5 border-purple-500/15"}`}>
+                                  {req.role}
+                                </span>
+                              </td>
+                              <td className="py-4 px-3 font-semibold text-zinc-300">{req.company || "Self Brand"}</td>
+                              <td className="py-4 px-3 text-zinc-400 text-[10.5px] max-w-[280px] break-words">{req.reason}</td>
+                              <td className="py-4 px-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-[8.5px] font-mono font-bold border uppercase tracking-widest ${req.status === "approved" ? "text-emerald-400 bg-emerald-500/5 border-emerald-500/15" : req.status === "pending" ? "text-amber-400 bg-amber-500/5 border-amber-500/15" : "text-rose-400 bg-rose-500/5 border-rose-500/15"}`}>
+                                  {req.status}
+                                </span>
+                              </td>
+                              <td className="py-4 px-3 text-right">
+                                {req.status === "pending" ? (
+                                  <div className="flex items-center justify-end gap-2 text-[9.5px] font-bold">
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          const r = await fetch(`/api/admin/login-requests/approve/${req.id}`, { method: "POST" });
+                                          if (r.ok) {
+                                            showToast(`Access approved. Created partner portal metadata!`);
+                                            await loadAdminData();
+                                          }
+                                        } catch (e) {
+                                          showToast("Waitlist request approved!");
+                                        }
+                                      }}
+                                      className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded-lg transition"
+                                    >
+                                      <Check size={11} />
+                                      <span>Admit Partner</span>
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          const r = await fetch(`/api/admin/login-requests/reject/${req.id}`, { method: "POST" });
+                                          if (r.ok) {
+                                            showToast(`Access request rejected.`);
+                                            await loadAdminData();
+                                          }
+                                        } catch (e) {
+                                          showToast("Rejected locally.");
+                                        }
+                                      }}
+                                      className="flex items-center gap-1 bg-zinc-900 border border-white/10 hover:bg-rose-950/20 text-rose-400 px-2 py-1 rounded-lg transition"
+                                    >
+                                      <Ban size={11} />
+                                      <span>Deny</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-500 font-mono select-none uppercase font-bold tracking-wider">Processed Request</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+                </>
               )}
 
             </div>

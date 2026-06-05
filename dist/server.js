@@ -1,68 +1,44 @@
-"use strict";
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-
 // server.ts
-var import_express = __toESM(require("express"), 1);
-var import_path = __toESM(require("path"), 1);
-var import_fs = __toESM(require("fs"), 1);
-var import_vite = require("vite");
-var app = (0, import_express.default)();
+import express from "express";
+import path from "path";
+import fs from "fs";
+import { createServer as createViteServer } from "vite";
+var app = express();
 var PORT = 3e3;
-app.use(import_express.default.json());
-var isResellerSubdir = import_fs.default.existsSync(import_path.default.resolve(process.cwd(), "reseller-panel"));
-var BASE_DIR = isResellerSubdir ? import_path.default.resolve(process.cwd(), "reseller-panel") : process.cwd();
-var STORAGE_DIR = import_path.default.resolve(BASE_DIR, "db_data");
-if (!import_fs.default.existsSync(STORAGE_DIR)) {
-  import_fs.default.mkdirSync(STORAGE_DIR, { recursive: true });
+app.use(express.json());
+var isResellerSubdir = fs.existsSync(path.resolve(process.cwd(), "reseller-panel"));
+var BASE_DIR = isResellerSubdir ? path.resolve(process.cwd(), "reseller-panel") : process.cwd();
+var STORAGE_DIR = path.resolve(BASE_DIR, "db_data");
+if (!fs.existsSync(STORAGE_DIR)) {
+  fs.mkdirSync(STORAGE_DIR, { recursive: true });
 }
-var LINKS_FILE = import_path.default.join(STORAGE_DIR, "crypto_links.json");
-var PAYOUTS_FILE = import_path.default.join(STORAGE_DIR, "crypto_payouts.json");
-var PLANS_FILE = import_path.default.join(STORAGE_DIR, "master_plans.json");
-var RESELLERS_FILE = import_path.default.join(STORAGE_DIR, "resellers.json");
+var LINKS_FILE = path.join(STORAGE_DIR, "crypto_links.json");
+var PAYOUTS_FILE = path.join(STORAGE_DIR, "crypto_payouts.json");
+var PLANS_FILE = path.join(STORAGE_DIR, "master_plans.json");
+var RESELLERS_FILE = path.join(STORAGE_DIR, "resellers.json");
 app.get("/config.json", (req, res) => {
-  const configFile = import_path.default.join(BASE_DIR, "config.json");
-  if (import_fs.default.existsSync(configFile)) {
+  const configFile = path.join(BASE_DIR, "config.json");
+  if (fs.existsSync(configFile)) {
     res.sendFile(configFile);
   } else {
     res.status(404).json({ error: "config.json not found" });
   }
 });
 app.get("/reseller-panel/config.json", (req, res) => {
-  const configFile = import_path.default.join(BASE_DIR, "config.json");
-  if (import_fs.default.existsSync(configFile)) {
+  const configFile = path.join(BASE_DIR, "config.json");
+  if (fs.existsSync(configFile)) {
     res.sendFile(configFile);
   } else {
     res.status(404).json({ error: "config.json not found" });
   }
 });
 var readJson = (filePath, fallback) => {
-  if (!import_fs.default.existsSync(filePath)) {
-    import_fs.default.writeFileSync(filePath, JSON.stringify(fallback, null, 2));
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, JSON.stringify(fallback, null, 2));
     return fallback;
   }
   try {
-    return JSON.parse(import_fs.default.readFileSync(filePath, "utf-8"));
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
   } catch (e) {
     console.error(`Error reading ${filePath}:`, e);
     return fallback;
@@ -70,7 +46,7 @@ var readJson = (filePath, fallback) => {
 };
 var writeJson = (filePath, data) => {
   try {
-    import_fs.default.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   } catch (e) {
     console.error(`Error writing to ${filePath}:`, e);
   }
@@ -514,16 +490,16 @@ app.get("/api/admin/system-stats", (req, res) => {
 });
 async function bootstrap() {
   if (process.env.NODE_ENV !== "production") {
-    const vite = await (0, import_vite.createServer)({
+    const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa"
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path.default.join(BASE_DIR, "dist");
-    app.use(import_express.default.static(distPath));
+    const distPath = path.join(BASE_DIR, "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile(import_path.default.join(distPath, "index.html"));
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
   app.listen(PORT, "0.0.0.0", () => {
@@ -533,4 +509,4 @@ async function bootstrap() {
 bootstrap().catch((err) => {
   console.error("Initialization failed:", err);
 });
-//# sourceMappingURL=server.cjs.map
+//# sourceMappingURL=server.js.map
