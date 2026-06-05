@@ -204,8 +204,7 @@ export default function ResellerPaymentGateway() {
       window.close();
     } catch (e) {}
     // Fallback safe redirect to panel router
-    const isResellerNested = window.location.pathname.includes("/reseller-panel");
-    navigate(isResellerNested ? "/reseller-panel" : "/");
+    navigate("/reseller-panel");
   };
 
   const formatCountdown = () => {
@@ -274,10 +273,7 @@ export default function ResellerPaymentGateway() {
                   <p className="text-xs text-zinc-500 max-w-xs leading-normal">{error}</p>
                 </div>
                 <button 
-                  onClick={() => {
-                    const isResellerNested = window.location.pathname.includes("/reseller-panel");
-                    navigate(isResellerNested ? "/reseller-panel" : "/");
-                  }} 
+                  onClick={() => navigate("/reseller-panel")} 
                   className="px-5 py-2.5 bg-zinc-900 border border-white/10 text-xs font-semibold rounded-xl text-white hover:bg-zinc-800 transition flex items-center gap-1.5"
                 >
                   <ArrowLeft size={14} />
@@ -300,7 +296,7 @@ export default function ResellerPaymentGateway() {
                   /* Settled Success View */
                   <div className="space-y-6 flex-1 flex flex-col justify-center py-4">
                     <div className="text-center space-y-2">
-                      <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/5">
+                       <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/5">
                         <Check size={22} />
                       </div>
                       <h3 className="text-lg font-bold text-white font-display tracking-tight uppercase leading-none mt-1">Invoice Settled Successfully</h3>
@@ -410,32 +406,10 @@ export default function ResellerPaymentGateway() {
                       </div>
                     </div>
 
-                    {/* 3. Simulated Dev Test Card */}
-                    <motion.div 
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/15 text-center space-y-3.5 mt-2"
-                    >
-                      <div className="flex items-center justify-center gap-1.5 text-xs text-indigo-300 font-bold font-display uppercase tracking-wider">
-                        <Wallet className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Developer Sandbox Faucet</span>
-                      </div>
-                      <p className="text-[10px] text-zinc-400 leading-relaxed max-w-xs mx-auto">
-                        No gas fees or actual coins required! Click below to send a simulated payment webhook directly to the ledger database to complete the transaction.
-                      </p>
-                      <button 
-                        onClick={simulatePaymentApproval}
-                        disabled={faucetLoading}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-80 active:scale-[0.99] text-xs font-bold text-white rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/10"
-                      >
-                        {faucetLoading ? (
-                          <div className="w-4 h-4 border-t-2 border-r-2 border-white rounded-full animate-spin" />
-                        ) : (
-                          <Coins size={14} />
-                        )}
-                        <span>{faucetLoading ? "Confirming blocks on ledger..." : "Simulate Payment (Faucet)"}</span>
-                      </button>
-                    </motion.div>
+                    {/* Real cryptocurrency payment check message */}
+                    <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10 text-center text-[10px] text-emerald-400 font-mono mt-2 animate-pulse">
+                      Uplink actively monitoring on-chain transaction ledger...
+                    </div>
                   </>
                 )}
               </motion.div>
