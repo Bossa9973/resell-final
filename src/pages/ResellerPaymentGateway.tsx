@@ -146,7 +146,7 @@ export default function ResellerPaymentGateway() {
           
           // Check if order already added to prevent duplicates
           const orderId = `ord-${result.link.id}`;
-          const exists = config.simulatedOrders.some((o: any) => o.id === orderId);
+          const exists = config.orders.some((o: any) => o.id === orderId);
           if (!exists) {
             const newOrderObj = {
               id: orderId,
@@ -159,9 +159,9 @@ export default function ResellerPaymentGateway() {
             };
             
             // Increment service counts or add client
-            const cExists = config.simulatedClients.some((c: any) => c.email === result.link.clientEmail);
+            const cExists = config.clients.some((c: any) => c.email === result.link.clientEmail);
             if (!cExists) {
-              config.simulatedClients.unshift({
+              config.clients.unshift({
                 id: `c-${Math.floor(100 + Math.random() * 900)}`,
                 name: result.link.clientName,
                 email: result.link.clientEmail,
@@ -170,13 +170,13 @@ export default function ResellerPaymentGateway() {
                 joined: new Date().toISOString().split("T")[0]
               });
             } else {
-              const cIdx = config.simulatedClients.findIndex((c: any) => c.email === result.link.clientEmail);
+              const cIdx = config.clients.findIndex((c: any) => c.email === result.link.clientEmail);
               if (cIdx !== -1) {
-                config.simulatedClients[cIdx].activeServices++;
+                config.clients[cIdx].activeServices++;
               }
             }
 
-            config.simulatedOrders.unshift(newOrderObj);
+            config.orders.unshift(newOrderObj);
             localStorage.setItem("lumen_reseller_config", JSON.stringify(config));
             
             // Dispatch storage event to keep tabs parallel
